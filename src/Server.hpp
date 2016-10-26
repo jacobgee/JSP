@@ -33,8 +33,13 @@ public:
     ~JSPServer();
     long openFile(const char*);
     void listen();
-    void* ListenThread();
-    static void* ListenThreadHelper(void* context) {return ((JSPServer*)context)->ListenThread();}
+    void* ListenThread(int threadid);
+    static void* ListenThreadHelper(void* arguments);
+};
+
+struct ThreadArgs {
+    JSPServer *context;
+    int threadid;
 };
 
 void displayUsage();

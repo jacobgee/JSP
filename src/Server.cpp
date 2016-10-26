@@ -71,13 +71,18 @@ long JSPServer::openFile(const char* filename)
 
 void JSPServer::listen()
 {
+    
     for(int i = 0; i < MAXTHREADS; i++)
     {
         if(mUsage[i] == 0)
             continue;
         
+        struct ThreadArgs args;
+        args.context = this;
+        args.threadid = i;
+        
         mUsage[i] = pthread_create(&mThreads[i], NULL,
-                            &JSPServer::ListenThreadHelper, (void *)this);
+                            &JSPServer::ListenThreadHelper, (void *)&args);
         if(mUsage[i]!=0)
             std::cerr << "::: Error Creating Thread " << i << "=( :::" << std::endl;
     }
@@ -93,11 +98,19 @@ void JSPServer::listen()
     }
 }
 
-void* JSPServer::ListenThread()
+void* JSPServer::ListenThread(int threadid)
 {
     Caller *c = mProtocol -> listen();
     dispatchCommand(c);
+    mUsage[threadid] = -1;
     pthread_exit(NULL);
+}
+
+void* JSPServer::ListenThreadHelper(void* arguments)
+{
+    struct ThreadArgs *args =  (struct ThreadArgs *) arguments;
+    
+    return args->context->ListenThread(args->threadid);
 }
 
 void JSPServer::dispatchCommand(Caller *c)

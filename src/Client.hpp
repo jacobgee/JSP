@@ -29,4 +29,6 @@ public:
     void setServer(const char* server) {mServer = server;}
 };
 
+void displayUsage();
+
 #endif /* Client_hpp */

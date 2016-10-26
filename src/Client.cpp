@@ -61,10 +61,33 @@ int JSPClient::init()
     return size;
 }
 
+void displayUsage()
+{
+    std::cout << "Usage: client server [port]" << std::endl;
+    return;
+}
+
 int main(int argc, char** argv)
 {
+    int port = STANDARD_PORT;
+    char *server;
+
+    if(argc != 2 && argc != 3)
+    {
+        displayUsage();
+        return EXIT_SUCCESS;
+    }
+    
+    server = argv[1];
+    
+    if(argc == 3)
+    {
+        port = atoi(argv[2]);
+        std::cout << "Server started on " << port << std::endl;
+    }
+
     std::cout << "Client Started." << std::endl;
-    JSPClient *client = new JSPClient("127.0.0.1", 2525);
+    JSPClient *client = new JSPClient(server, 2525);
     client->connect();
     std::cout << "File Size: " << client->init() << std::endl;
     delete client;
