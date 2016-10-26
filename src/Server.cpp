@@ -71,7 +71,6 @@ long JSPServer::openFile(const char* filename)
 
 void JSPServer::listen()
 {
-    
     for(int i = 0; i < MAXTHREADS; i++)
     {
         if(mUsage[i] == 0)
@@ -84,7 +83,7 @@ void JSPServer::listen()
         mUsage[i] = pthread_create(&mThreads[i], NULL,
                             &JSPServer::ListenThreadHelper, (void *)&args);
         if(mUsage[i]!=0)
-            std::cerr << "::: Error Creating Thread " << i << "=( :::" << std::endl;
+            std::cerr << "::: Error Creating Thread " << i << "=( Error code: "<< mUsage[i] <<" :::" << std::endl;
     }
     
     for(int i = 0; i < MAXTHREADS; i++)
@@ -93,8 +92,21 @@ void JSPServer::listen()
         {
             mUsage[i] = pthread_join(mThreads[i],NULL);
             if(mUsage[i]!=0)
-                std::cerr << "::: Error Joining Thread " << i << " =( :::" << std::endl;
+                std::cerr << "::: Error Joining Thread " << i << " =( Error code: "<< mUsage[i] <<" :::" << std::endl;
         }
+    }
+}
+
+void JSPServer::timeouts()
+{
+    client_t c = mClientStatus.top();
+    time_t currentTime = time(NULL);
+    int delta = 0;
+    delta = currentTime - c.lastPacket;
+    if(delta > c.eRTT)
+    {
+        mClientStatus.pop();
+        dispatchCommand(&c.client);
     }
 }
 
@@ -129,8 +141,44 @@ void JSPServer::dispatchCommand(Caller *c)
         msg += std::to_string(mFileSize);
         std::cout << "RECV Initiation from " << inet_ntoa(c->c_addr.sin_addr) << std::endl;
         mProtocol->send(c, msg.c_str());
+        client_t s;
+        memcpy(&s.client, c, sizeof(Caller));
+        s.lastPacket=time(NULL);
+        s.eRTT = 15;
+        s.std = 0;
+        s.seq = 0;
+        s.absoluteByteLocation = 0;
+        mClientStatus.push(s);
+    }
+    else if(strcmp(cmd, "YAAS") == 0)
+    {
+        
     }
         
+}
+
+client_t JSPServer::qPop(Caller* c)
+{
+    bool flag;
+    std::priority_queue<client_t> temp;
+    client_t s;
+    while(!mClientStatus.empty())
+    {
+        s = mClientStatus.top();
+        if(strcmp(c->message, s.client.message) == 0)
+        {
+            mClientStatus.pop();
+            break;
+        }
+        
+        temp.push(s);
+        mClientStatus.pop();
+    }
+    while(!temp.empty())
+    {
+        client_t r = temp.top();
+        mClientStatus.push(r);
+    }
 }
 
 int main(int argc, char** argv)
