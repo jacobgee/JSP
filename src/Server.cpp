@@ -85,32 +85,28 @@ long JSPServer::openFile(const char* filename)
 // Warning: Here be dragons
 void JSPServer::listen()
 {
+    // Now let's create the threads
     
     for(int i = 0; i < MAXTHREADS; i++)
     {
-        struct ThreadArgs args;
-        args.context = this;
-        args.threadid = i;
+        struct ThreadArgs args; // arguments to pass to thread
+        args.context = this;    // send local object
+        args.threadid = i;      // send thread id
         
         mUsage[i] = pthread_create(&mThreads[i], NULL,
                             &JSPServer::ListenThreadHelper, (void *)&args); // create thread
-        if(mUsage[i]!=0)
+        if(mUsage[i]!=0) // if we could not create thread, warn user
             std::cerr << "::: Error Creating Thread " << i << "=( Error code: "<< mUsage[i] <<" :::" << std::endl;
     }
     
-    //int status = 
     pthread_create(&mTimeout, NULL,
                                 &JSPServer::TimeoutThreadHelper, (void *)this); // create timeout thread
-    /*if(status == 0)
-        pthread_join(mTimeout, NULL); // join if no error */
     
-    for(int i = 0; i < MAXTHREADS; i++)
+    for(int i = 0; i < MAXTHREADS; i++) // now check and join threads to main
     {
         if(mUsage[i] == 0)
         {
             mUsage[i] = pthread_join(mThreads[i],NULL); // join threads
-            //if(mUsage[i]!=0)
-                //std::cerr << "::: Error Joining Thread " << i << " =( Error code: "<< mUsage[i] <<" :::" << std::endl;
         }
     }
 }
@@ -138,10 +134,10 @@ void JSPServer::timeouts()
 
 void* JSPServer::ListenThread(int threadid)
 {
-    Caller *c = mProtocol -> listen();
-    dispatchCommand(c);
-    delete c;
-    pthread_exit(NULL);
+    Caller *c = mProtocol -> listen(); // SIt and listen
+    dispatchCommand(c);                // Do stuff when we recieve data
+    delete c;                          // Memleaks are bad, mmkay
+    pthread_exit(NULL);                // Finish thread and prepare to begin again
 }
 
 void* JSPServer::TimeoutThread()
@@ -149,11 +145,11 @@ void* JSPServer::TimeoutThread()
     while(1)
     {
         //std::cout << "Checking Timeouts: " << std::endl;
-        timeouts();
-        sleep(1);
+        timeouts(); // check timeouts
+        sleep(1);   // take a nap
     }
 
-    pthread_exit(NULL);
+    pthread_exit(NULL); // never called
 }
 
 void* JSPServer::TimeoutThreadHelper(void* context)
@@ -241,8 +237,6 @@ void JSPServer::dispatchCommand(Caller *c)
         msg += ack;
         mProtocol->send(c, msg.c_str(), 1026);
         
-        //std::cout << "LOAD " << mData[packet+absolute] << std::endl;
-        //std::cout << "SEND " << msg.c_str() << std::endl;
     }
         
 }
