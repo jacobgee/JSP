@@ -106,19 +106,19 @@ char* JSP::replyWait()
     return buf;
 }
 
-void JSP::send(Caller *c, const char* msg)
+void JSP::send(Caller *c, const char* msg, int len)
 {
     socklen_t sLen = sizeof(c->c_addr);
-    if(sendto(mSocket, msg, strlen(msg), 0, (struct sockaddr *) &c->c_addr, sLen) == -1)
+    if(sendto(mSocket, msg, len, 0, (struct sockaddr *) &c->c_addr, sLen) == -1)
     {
         die("::: Error Sending packet to Client =( :::");
     }
 }
 
-void JSP::send(const char* msg)
+void JSP::send(const char* msg, int len)
 {
     socklen_t sLen = sizeof(mForeign);
-    if (sendto(mSocket, msg, strlen(msg) , 0,(struct sockaddr *) &mForeign, sLen)==-1)
+    if (sendto(mSocket, msg, len, 0,(struct sockaddr *) &mForeign, sLen)==-1)
     {
         die("::: Error Sending Packet =( :::");
     }

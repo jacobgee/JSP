@@ -49,7 +49,7 @@ long JSPServer::openFile(const char* filename)
         buffer[mFileSize] = '\0';
         
         // read data as a block:
-        is.read ((char*)buffer,mFileSize);
+        is.read (buffer,mFileSize);
         
         is.close();
         
@@ -180,7 +180,7 @@ void JSPServer::dispatchCommand(Caller *c)
         // report init to console
         std::cout << "RECV Initiation from " << inet_ntoa(c->c_addr.sin_addr) << std::endl;
         // send file size to client
-        mProtocol->send(c, msg.c_str());
+        mProtocol->send(c, msg.c_str(), msg.size());
         // now build the timeout packet
         client_t s;
         memcpy(&s.client, c, sizeof(Caller));
@@ -197,13 +197,10 @@ void JSPServer::dispatchCommand(Caller *c)
         std::string msg;
         float std;
         float eRTT;
-        char ack = c->message[5];
+        unsigned char ack = c->message[5];
         int packet;
         
-        if (ack == 'i')
-            packet = 0;
-        else
-            packet = (int) ack;
+        packet = (int) ack;
         
         
         // build timeout packet
@@ -231,10 +228,12 @@ void JSPServer::dispatchCommand(Caller *c)
         s.absoluteByteLocation = absolute;
         mClientStatus.push(s); // save to queue.
         
+        std::cout << inet_ntoa(c->c_addr.sin_addr) << " REQUESTS " << packet+absolute << std::endl;
+        
         // now send packet
-        msg += ack;
         msg.append(mData[packet+absolute],1024);
-        mProtocol->send(c, msg.c_str());
+        msg += ack;
+        mProtocol->send(c, msg.c_str(), 1026);
         
         //std::cout << "LOAD " << mData[packet+absolute] << std::endl;
         //std::cout << "SEND " << msg.c_str() << std::endl;

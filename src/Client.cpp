@@ -45,7 +45,7 @@ int JSPClient::init()
     
     while (strcmp(chk, "HELO") != 0)
     {
-        mProtocol->send("POKE");
+        mProtocol->send("POKE", 4);
         strcpy(buf, mProtocol->replyWait());
         for(int i = 0; i < 4; i++)
             chk[i] = buf[i];
@@ -55,18 +55,6 @@ int JSPClient::init()
     
     mCurrent = 0;
     
-    return size;
-}
-
-void JSPClient::fetch()
-{
-    char buff[1026];
-    char pkt;
-    int packet;
-    if(mCurrent == -1)
-        return;
-    
-    mTotalReceived = 0;
     mData = new char*[mNumChunks];
     
     for(int i = 0 ; i < mNumChunks; i++)
@@ -74,36 +62,50 @@ void JSPClient::fetch()
         mData[i] = new char[1024];
     }
     
+    for(int i = 0; i < mNumChunks; i++)
+        for(int j=0; j < 1024; j++)
+            mData[i][j] = '\0';
+    
+    return size;
+}
+
+void JSPClient::fetch()
+{
+    char buff[1026];
+    unsigned char pkt;
+    int packet;
+    if(mCurrent == -1)
+        return;
+    
+    mTotalReceived = 0;
+    
     while(mTotalReceived < mNumChunks)
     {
         std::string msg;
         msg = "YAAS ";
-        if(mCurrent != 0)
-            msg += (char)mCurrent;
-        else
-            msg += 'i';
-        //std::cout << "\tREQ: " << mCurrent << std::endl;
-        mProtocol->send(msg.c_str());
+        msg += (unsigned char)mCurrent;
+        std::cout << "\tREQ: " << mCurrent << std::endl;
+        mProtocol->send(msg.c_str(), 6);
         memcpy(buff, mProtocol->replyWait(), 1026);
-        //std::cout << "GOT " << buff << std::endl;
-        pkt = (char) buff[0];
-        if(pkt == 'i')
-            packet = 0;
-        else
-            packet = (int) pkt;
+        pkt = (unsigned char) buff[1024];
+        
+        packet = (int) pkt;
+        
+        std::cout << "\tREC: " << packet << std::endl;
         
         if (packet == mCurrent)
         {
-            //std::cout << "\tREC: " << packet << std::endl;
             // save data
             for(int i = 0; i < 1024; i++)
             {
-                mData[mCurrent][i]=buff[i+1];
+                mData[mCurrent][i]=buff[i];
+                std::cout << mData[mCurrent][i];
             }
             // rdy for next
             mCurrent++;
             mTotalReceived++;
         } else {
+            //std::cout << "Invalid Packet: " << packet << std::endl;
             continue;
         }
         if(mCurrent > 255)
@@ -119,7 +121,11 @@ void JSPClient::saveFile(const char* filename)
     out = fopen(filename, "wb");
     for(int i = 0; i < mNumChunks; i++)
     {
-        fwrite(mData[i], sizeof(char), 1024, out);
+        for(int j = 0; j < 1024; j++)
+        {
+            fwrite(&mData[i][j], 1, 1, out);
+            std::cout << mData[i][j];
+        }
     }
     fclose(out);
     return;

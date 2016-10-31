@@ -10,7 +10,7 @@
 #define JSP_hpp
 
 #define STANDARD_PORT 2525
-#define BUFLEN 1024
+#define BUFLEN 1026
 #define MAXTHR 3
 
 // STATE CODES
@@ -53,8 +53,8 @@ public:
     void tunnel(const char*);
     Caller* listen();
     char* replyWait();
-    void send(const char*);
-    void send(Caller*, const char*);
+    void send(const char*, int);
+    void send(Caller*, const char*, int);
     void setPort(int port);
     int getPort();
 };
