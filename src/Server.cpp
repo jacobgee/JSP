@@ -45,20 +45,33 @@ long JSPServer::openFile(const char* filename)
         is.seekg (0, is.beg);
         
         // allocate memory:
-        char * buffer = new char [mFileSize];
+        char * buffer = new char [mFileSize + 1];
+        buffer[mFileSize] = '\0';
         
         // read data as a block:
-        is.read (buffer,mFileSize);
+        is.read ((char*)buffer,mFileSize);
         
         is.close();
         
         mNumChunks = (mFileSize / 1024) + 1;
         
-        mData = new unsigned char*[mNumChunks];
+        mData = new char*[mNumChunks];
         
         for(int i = 0 ; i < mNumChunks; i++)
         {
-            mData[i] = new unsigned char[1024];
+            mData[i] = new char[1024];
+            for(int j = 0; j < 1024; j++)
+                mData[i][j] = '\0';
+        }
+        
+        int k=0;
+        
+        for(int i = 0; i < mNumChunks; i++)
+        {
+            for(int j = 0; j < 1024; j++)
+            {
+                mData[i][j] = buffer[k++];
+            }
         }
         
         return mFileSize;
@@ -91,12 +104,15 @@ void JSPServer::listen()
         if(mUsage[i] == 0)
         {
             mUsage[i] = pthread_join(mThreads[i],NULL); // join threads
-            if(mUsage[i]!=0)
-                std::cerr << "::: Error Joining Thread " << i << " =( Error code: "<< mUsage[i] <<" :::" << std::endl;
+            //if(mUsage[i]!=0)
+                //std::cerr << "::: Error Joining Thread " << i << " =( Error code: "<< mUsage[i] <<" :::" << std::endl;
         }
     }
     
-    int status = pthread_create(&mTimeout, NULL,
+    int status = -1;
+    
+    while(status != 0)
+        status = pthread_create(&mTimeout, NULL,
                    &JSPServer::TimeoutThreadHelper, (void *)this); // create timeout thread
     if(status == 0)
         pthread_join(mTimeout, NULL); // join if no error
@@ -106,7 +122,6 @@ void JSPServer::timeouts()
 {
     if(mClientStatus.empty())
     {
-        std::cout << "Timeout Empty" << std::endl;
         return; // nothing in timeout queue, jsut die.
     }
     client_t c = mClientStatus.top(); // check the top
@@ -182,18 +197,25 @@ void JSPServer::dispatchCommand(Caller *c)
         std::string msg;
         float std;
         float eRTT;
-        unsigned char ack = c->message[5];
-        int packet = (int) ack;
+        char ack = c->message[5];
+        int packet;
+        
+        if (ack == 'i')
+            packet = 0;
+        else
+            packet = (int) ack;
+        
         
         // build timeout packet
         client_t s = qPop(c, packet-1);
         absolute = s.absoluteByteLocation;
-        std::cout << "REQ: " << packet+absolute << "/" << mNumChunks << std::endl;
-        std::cout << "\tPacket " << packet << "/" << 255 << std::endl;
+        
+        if(absolute + packet + 1 == mNumChunks)
+            std::cout << inet_ntoa(c->c_addr.sin_addr) << " Complete." << std::endl;
         
         // is our sequence finished?
         if(packet == 0 && s.seq == 255)
-            absolute += 255; // inc. the absolute position
+            absolute += 256; // inc. the absolute position
         
         // calculate timeout
         sRTT = time(NULL) - s.lastPacket;
@@ -211,8 +233,12 @@ void JSPServer::dispatchCommand(Caller *c)
         
         // now send packet
         msg += ack;
-        msg.append((const char*)mData[packet+absolute],1024);
+        msg.append(mData[packet+absolute],1024);
         mProtocol->send(c, msg.c_str());
+        
+        //std::cout << "LOAD " << mData[packet+absolute] << std::endl;
+        //std::cout << "SEND " << msg.c_str() << std::endl;
+        timeouts();
     }
         
 }

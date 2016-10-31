@@ -12,13 +12,14 @@
 #include <iostream>
 #include <fstream>
 #include <cstdlib>
+#include <cstdio>
 #include <cstring>
 #include "JSP.hpp"
 
 class JSPClient {
     JSP *mProtocol;
     const char* mServer;
-    unsigned char** mData;
+    char** mData;
     int mNumChunks;
     int mCurrent;
     int mTotalReceived;

@@ -18,8 +18,8 @@
 #include "SafeExit.hpp"
 #include "JSP.hpp"
 
-#define MAXTHREADS 3
-#define STANDARD_TIMEOUT 3
+#define MAXTHREADS 10
+#define STANDARD_TIMEOUT 1
 
 typedef struct ClientStatus {
     Caller client;
@@ -49,7 +49,7 @@ class JSPServer
     pthread_t mTimeout;
     int mUsage[MAXTHREADS];
     void dispatchCommand(Caller*);
-    unsigned char **mData;
+    char **mData;
     int mNumChunks;
     std::priority_queue<client_t> mClientStatus;
     client_t qPop(Caller*, int);

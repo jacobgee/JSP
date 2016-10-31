@@ -53,15 +53,7 @@ int JSPClient::init()
     size = atol(&buf[5]);
     mNumChunks = (size/1024)+1;
     
-    mData = new unsigned char*[mNumChunks];
-    
-    for(int i = 0 ; i < mNumChunks; i++)
-    {
-        mData[i] = new unsigned char[1024];
-    }
-    
     mCurrent = 0;
-    mTotalReceived = 0;
     
     return size;
 }
@@ -69,29 +61,50 @@ int JSPClient::init()
 void JSPClient::fetch()
 {
     char buff[1026];
-    unsigned char pkt;
+    char pkt;
     int packet;
     if(mCurrent == -1)
         return;
+    
+    mTotalReceived = 0;
+    mData = new char*[mNumChunks];
+    
+    for(int i = 0 ; i < mNumChunks; i++)
+    {
+        mData[i] = new char[1024];
+    }
     
     while(mTotalReceived < mNumChunks)
     {
         std::string msg;
         msg = "YAAS ";
-        msg += (unsigned char)mCurrent;
-        std::cout << "\tREQ: " << mCurrent << std::endl;
+        if(mCurrent != 0)
+            msg += (char)mCurrent;
+        else
+            msg += 'i';
+        //std::cout << "\tREQ: " << mCurrent << std::endl;
         mProtocol->send(msg.c_str());
-        strcpy(buff, mProtocol->replyWait());
-        pkt = (unsigned char) buff[0];
-        packet = (int) pkt;
+        memcpy(buff, mProtocol->replyWait(), 1026);
+        //std::cout << "GOT " << buff << std::endl;
+        pkt = (char) buff[0];
+        if(pkt == 'i')
+            packet = 0;
+        else
+            packet = (int) pkt;
+        
         if (packet == mCurrent)
         {
-            std::cout << "\tREC: " << packet << std::endl;
+            //std::cout << "\tREC: " << packet << std::endl;
             // save data
-            memcpy(&mData[mCurrent], &buff[1], 1024);
+            for(int i = 0; i < 1024; i++)
+            {
+                mData[mCurrent][i]=buff[i+1];
+            }
             // rdy for next
             mCurrent++;
             mTotalReceived++;
+        } else {
+            continue;
         }
         if(mCurrent > 255)
             mCurrent = 0;
@@ -102,18 +115,13 @@ void JSPClient::fetch()
 
 void JSPClient::saveFile(const char* filename)
 {
-    std::fstream file;
-    file.open(filename,std::ios::out | std::ios::binary);
-    if(file.fail())
-    {
-        std::cerr << "::: Could Not Save File =( :::" << std::endl;
-        return;
-    }
+    FILE* out;
+    out = fopen(filename, "wb");
     for(int i = 0; i < mNumChunks; i++)
     {
-        file.write((char*)mData[i], 1024);
+        fwrite(mData[i], sizeof(char), 1024, out);
     }
-    file.close();
+    fclose(out);
     return;
 }
 
