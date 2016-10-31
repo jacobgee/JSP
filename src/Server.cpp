@@ -99,6 +99,11 @@ void JSPServer::listen()
             std::cerr << "::: Error Creating Thread " << i << "=( Error code: "<< mUsage[i] <<" :::" << std::endl;
     }
     
+    int status = pthread_create(&mTimeout, NULL,
+                                &JSPServer::TimeoutThreadHelper, (void *)this); // create timeout thread
+    /*if(status == 0)
+        pthread_join(mTimeout, NULL); // join if no error */
+    
     for(int i = 0; i < MAXTHREADS; i++)
     {
         if(mUsage[i] == 0)
@@ -108,14 +113,6 @@ void JSPServer::listen()
                 //std::cerr << "::: Error Joining Thread " << i << " =( Error code: "<< mUsage[i] <<" :::" << std::endl;
         }
     }
-    
-    int status = -1;
-    
-    while(status != 0)
-        status = pthread_create(&mTimeout, NULL,
-                   &JSPServer::TimeoutThreadHelper, (void *)this); // create timeout thread
-    if(status == 0)
-        pthread_join(mTimeout, NULL); // join if no error
 }
 
 void JSPServer::timeouts()
@@ -146,7 +143,13 @@ void* JSPServer::ListenThread(int threadid)
 
 void* JSPServer::TimeoutThread()
 {
-    timeouts();
+    while(1)
+    {
+        std::cout << "Checking Timeouts: " << std::endl;
+        timeouts();
+        sleep(1);
+    }
+
     pthread_exit(NULL);
 }
 
@@ -237,7 +240,6 @@ void JSPServer::dispatchCommand(Caller *c)
         
         //std::cout << "LOAD " << mData[packet+absolute] << std::endl;
         //std::cout << "SEND " << msg.c_str() << std::endl;
-        timeouts();
     }
         
 }
