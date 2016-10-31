@@ -18,13 +18,14 @@
 #include "SafeExit.hpp"
 #include "JSP.hpp"
 
-#define MAXTHREADS 10
+#define MAXTHREADS 3
+#define STANDARD_TIMEOUT 3
 
 typedef struct ClientStatus {
     Caller client;
     time_t lastPacket;
     int eRTT = 0;
-    int std = 0;
+    int std;
     int seq = 0;
     long absoluteByteLocation = 0;
     
@@ -45,12 +46,13 @@ class JSPServer
     JSP *mProtocol;
     long mFileSize;
     pthread_t mThreads[MAXTHREADS];
+    pthread_t mTimeout;
     int mUsage[MAXTHREADS];
     void dispatchCommand(Caller*);
     unsigned char **mData;
     int mNumChunks;
     std::priority_queue<client_t> mClientStatus;
-    client_t qPop(Caller*);
+    client_t qPop(Caller*, int);
 public:
     JSPServer();
     JSPServer(int);
@@ -59,6 +61,8 @@ public:
     void listen();
     void timeouts();
     void* ListenThread(int threadid);
+    void* TimeoutThread();
+    static void* TimeoutThreadHelper(void*);
     static void* ListenThreadHelper(void* arguments);
 };
 

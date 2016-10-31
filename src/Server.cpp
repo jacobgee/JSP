@@ -17,7 +17,6 @@ JSPServer::JSPServer()
     {
         mUsage[i]=-1;
     }
-
 }
 
 JSPServer::JSPServer(int port)
@@ -29,7 +28,6 @@ JSPServer::JSPServer(int port)
     {
         mUsage[i]=-1;
     }
-
 }
 
 JSPServer::~JSPServer()
@@ -69,19 +67,21 @@ long JSPServer::openFile(const char* filename)
     return -1; // failed
 }
 
+// Warning: Here be dragons
 void JSPServer::listen()
 {
+    
     for(int i = 0; i < MAXTHREADS; i++)
     {
         if(mUsage[i] == 0)
-            continue;
+            continue; // if the thread is currently in use, continue
         
         struct ThreadArgs args;
         args.context = this;
         args.threadid = i;
         
         mUsage[i] = pthread_create(&mThreads[i], NULL,
-                            &JSPServer::ListenThreadHelper, (void *)&args);
+                            &JSPServer::ListenThreadHelper, (void *)&args); // create thread
         if(mUsage[i]!=0)
             std::cerr << "::: Error Creating Thread " << i << "=( Error code: "<< mUsage[i] <<" :::" << std::endl;
     }
@@ -90,23 +90,34 @@ void JSPServer::listen()
     {
         if(mUsage[i] == 0)
         {
-            mUsage[i] = pthread_join(mThreads[i],NULL);
+            mUsage[i] = pthread_join(mThreads[i],NULL); // join threads
             if(mUsage[i]!=0)
                 std::cerr << "::: Error Joining Thread " << i << " =( Error code: "<< mUsage[i] <<" :::" << std::endl;
         }
     }
+    
+    int status = pthread_create(&mTimeout, NULL,
+                   &JSPServer::TimeoutThreadHelper, (void *)this); // create timeout thread
+    if(status == 0)
+        pthread_join(mTimeout, NULL); // join if no error
 }
 
 void JSPServer::timeouts()
 {
-    client_t c = mClientStatus.top();
-    time_t currentTime = time(NULL);
-    int delta = 0;
-    delta = currentTime - c.lastPacket;
-    if(delta > c.eRTT)
+    if(mClientStatus.empty())
     {
-        mClientStatus.pop();
-        dispatchCommand(&c.client);
+        std::cout << "Timeout Empty" << std::endl;
+        return; // nothing in timeout queue, jsut die.
+    }
+    client_t c = mClientStatus.top(); // check the top
+    time_t currentTime = time(NULL);  // get current time
+    int delta = 0;
+    delta = currentTime - c.lastPacket; // get time difference since last packet
+    if(delta > (c.eRTT+3*c.std))        // if the difference is greater than the timeout
+    {
+        mClientStatus.pop();            // pop it and then
+        std::cout << "Retry: ";         // resend
+        dispatchCommand(&c.client);     // the packet
     }
 }
 
@@ -116,6 +127,17 @@ void* JSPServer::ListenThread(int threadid)
     dispatchCommand(c);
     mUsage[threadid] = -1;
     pthread_exit(NULL);
+}
+
+void* JSPServer::TimeoutThread()
+{
+    timeouts();
+    pthread_exit(NULL);
+}
+
+void* JSPServer::TimeoutThreadHelper(void* context)
+{
+    return ((JSPServer *)context)->TimeoutThread();
 }
 
 void* JSPServer::ListenThreadHelper(void* arguments)
@@ -137,48 +159,87 @@ void JSPServer::dispatchCommand(Caller *c)
     if(strcmp(cmd, "POKE") == 0)
     {
         std::string msg;
+        // report file size to client
         msg = "HELO ";
         msg += std::to_string(mFileSize);
+        // report init to console
         std::cout << "RECV Initiation from " << inet_ntoa(c->c_addr.sin_addr) << std::endl;
+        // send file size to client
         mProtocol->send(c, msg.c_str());
+        // now build the timeout packet
         client_t s;
         memcpy(&s.client, c, sizeof(Caller));
         s.lastPacket=time(NULL);
-        s.eRTT = 15;
+        s.eRTT = STANDARD_TIMEOUT;  // standard timeout
         s.std = 0;
-        s.seq = 0;
-        s.absoluteByteLocation = 0;
-        mClientStatus.push(s);
+        s.seq = 0;                  // seq index starts at 0
+        s.absoluteByteLocation = 0; // start at the beginning
+        mClientStatus.push(s);      // save to timeout
     }
     else if(strcmp(cmd, "YAAS") == 0)
     {
+        int absolute, sRTT;
+        std::string msg;
+        float std;
+        float eRTT;
+        unsigned char ack = c->message[5];
+        int packet = (int) ack;
         
+        // build timeout packet
+        client_t s = qPop(c, packet-1);
+        absolute = s.absoluteByteLocation;
+        std::cout << "REQ: " << packet+absolute << "/" << mNumChunks << std::endl;
+        std::cout << "\tPacket " << packet << "/" << 255 << std::endl;
+        
+        // is our sequence finished?
+        if(packet == 0 && s.seq == 255)
+            absolute += 255; // inc. the absolute position
+        
+        // calculate timeout
+        sRTT = time(NULL) - s.lastPacket;
+        eRTT = 0.825 * s.eRTT + 0.175 * sRTT;
+        std = 0.75*s.std + 0.25 * abs(int(sRTT-eRTT));
+        
+        // build our timeout packet
+        memcpy(&s.client, c, sizeof(Caller));
+        s.lastPacket=time(NULL);
+        s.eRTT = (int)eRTT;
+        s.std = (int)std;
+        s.seq = packet;
+        s.absoluteByteLocation = absolute;
+        mClientStatus.push(s); // save to queue.
+        
+        // now send packet
+        msg += ack;
+        msg.append((const char*)mData[packet+absolute],1024);
+        mProtocol->send(c, msg.c_str());
     }
         
 }
 
-client_t JSPServer::qPop(Caller* c)
+client_t JSPServer::qPop(Caller* c, int seq)
 {
-    bool flag;
     std::priority_queue<client_t> temp;
     client_t s;
-    while(!mClientStatus.empty())
+    while(!mClientStatus.empty()) // dig through the timeout queue
     {
-        s = mClientStatus.top();
-        if(strcmp(c->message, s.client.message) == 0)
+        s = mClientStatus.top(); // look at the top
+        if(strcmp(inet_ntoa(c->c_addr.sin_addr), inet_ntoa(s.client.c_addr.sin_addr)) == 0)
         {
-            mClientStatus.pop();
-            break;
+            mClientStatus.pop(); // pop if it's the one we are looking for.
+            break;               // we found it, no need to continue
         }
         
-        temp.push(s);
-        mClientStatus.pop();
+        temp.push(s);            // save it to the temp
+        mClientStatus.pop();     // clear it from queue
     }
-    while(!temp.empty())
+    while(!temp.empty())         // dig through our temp queue
     {
-        client_t r = temp.top();
-        mClientStatus.push(r);
+        client_t r = temp.top(); // get the data
+        mClientStatus.push(r);   // return it the the timeoutqueue
+        temp.pop();              // clear temp queue
     }
+    return s;                    // return what we found, or the last element.
 }
 
 int main(int argc, char** argv)
@@ -225,5 +286,6 @@ int main(int argc, char** argv)
 
 void displayUsage()
 {
-    std::cout << "Usage: server filename [port]" << std::endl;
+    std::cout << "Usage: jserver filename [port]" << std::endl;
+    std::cout << "\tStandard Port: 2525" << std::endl;
 }

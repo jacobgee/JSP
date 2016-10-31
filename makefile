@@ -5,12 +5,12 @@ SERVER_FILES := $(filter-out obj/Client.o, $(OBJ_FILES))
 LD_FLAGS := -Wall
 CC_FLAGS := -Wall -std=c++0x
 
-all: server client
+all: jserver jclient
 
-server: $(SERVER_FILES)
+jserver: $(SERVER_FILES)
 	g++ $(LD_FLAGS) -lpthread -o $(addprefix build/,$@) $^
 
-client: $(CLIENT_FILES)
+jclient: $(CLIENT_FILES)
 	g++ $(LD_FLAGS) -o $(addprefix build/,$@) $^
 
 obj/%.o: src/%.cpp src
