@@ -19,7 +19,6 @@
 class JSPClient {
     JSP *mProtocol;
     const char* mServer;
-    char** mData;
     int mNumChunks;
     int mCurrent;
     int mTotalReceived;
@@ -29,8 +28,7 @@ public:
     ~JSPClient();
     void connect();
     int init();
-    void fetch();
-    void saveFile(const char*);
+    void fetch(const char*);
     void setServer(const char* server) {mServer = server;}
 };
 

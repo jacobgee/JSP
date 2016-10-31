@@ -55,21 +55,10 @@ int JSPClient::init()
     
     mCurrent = 0;
     
-    mData = new char*[mNumChunks];
-    
-    for(int i = 0 ; i < mNumChunks; i++)
-    {
-        mData[i] = new char[1024];
-    }
-    
-    for(int i = 0; i < mNumChunks; i++)
-        for(int j=0; j < 1024; j++)
-            mData[i][j] = '\0';
-    
     return size;
 }
 
-void JSPClient::fetch()
+void JSPClient::fetch(const char* filename)
 {
     char buff[1026];
     unsigned char pkt;
@@ -78,6 +67,15 @@ void JSPClient::fetch()
         return;
     
     mTotalReceived = 0;
+    
+    FILE* out;
+    out = fopen(filename, "wb");
+    
+    if(out == NULL)
+    {
+        std::cerr << "Invalid file!" << std::endl;
+        exit(EXIT_FAILURE);
+    }
     
     while(mTotalReceived < mNumChunks)
     {
@@ -95,12 +93,7 @@ void JSPClient::fetch()
         
         if (packet == mCurrent)
         {
-            // save data
-            for(int i = 0; i < 1024; i++)
-            {
-                mData[mCurrent][i]=buff[i];
-                std::cout << mData[mCurrent][i];
-            }
+            fwrite(buff, 1, 1024, out);
             // rdy for next
             mCurrent++;
             mTotalReceived++;
@@ -113,22 +106,7 @@ void JSPClient::fetch()
         std::cout << "Status: " << mTotalReceived << "/" << mNumChunks << std::endl;
     }
     std::cout << "Recieved all data!" << std::endl;
-}
-
-void JSPClient::saveFile(const char* filename)
-{
-    FILE* out;
-    out = fopen(filename, "wb");
-    for(int i = 0; i < mNumChunks; i++)
-    {
-        for(int j = 0; j < 1024; j++)
-        {
-            fwrite(&mData[i][j], 1, 1, out);
-            std::cout << mData[i][j];
-        }
-    }
     fclose(out);
-    return;
 }
 
 void displayUsage()
@@ -164,10 +142,7 @@ int main(int argc, char** argv)
     JSPClient *client = new JSPClient(server, 2525);
     client->connect();
     std::cout << "File Size: " << client->init() << std::endl;
-    client->fetch();
-    std::cout << "Saving file...";
-    client->saveFile(filename);
-    std::cout << "done." << std::endl;
+    client->fetch(filename);
     delete client;
     std::cout << "Client Stopped." << std::endl;
     return 0;
