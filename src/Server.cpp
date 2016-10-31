@@ -74,6 +74,8 @@ long JSPServer::openFile(const char* filename)
             }
         }
         
+        delete buffer;
+        
         return mFileSize;
     }
     
@@ -86,9 +88,6 @@ void JSPServer::listen()
     
     for(int i = 0; i < MAXTHREADS; i++)
     {
-        if(mUsage[i] == 0)
-            continue; // if the thread is currently in use, continue
-        
         struct ThreadArgs args;
         args.context = this;
         args.threadid = i;
@@ -99,7 +98,8 @@ void JSPServer::listen()
             std::cerr << "::: Error Creating Thread " << i << "=( Error code: "<< mUsage[i] <<" :::" << std::endl;
     }
     
-    int status = pthread_create(&mTimeout, NULL,
+    //int status = 
+    pthread_create(&mTimeout, NULL,
                                 &JSPServer::TimeoutThreadHelper, (void *)this); // create timeout thread
     /*if(status == 0)
         pthread_join(mTimeout, NULL); // join if no error */
@@ -121,11 +121,14 @@ void JSPServer::timeouts()
     {
         return; // nothing in timeout queue, jsut die.
     }
-    client_t c = mClientStatus.top(); // check the top
+    client_t c;
+    memcpy(&c, &mClientStatus.top(), sizeof(client_t)); // check the top
     time_t currentTime = time(NULL);  // get current time
     int delta = 0;
+    int timeout = 0;
+    timeout = (c.eRTT+3*c.std);
     delta = currentTime - c.lastPacket; // get time difference since last packet
-    if(delta > (c.eRTT+3*c.std))        // if the difference is greater than the timeout
+    if(delta > timeout)        // if the difference is greater than the timeout
     {
         mClientStatus.pop();            // pop it and then
         std::cout << "Retry: ";         // resend
@@ -137,7 +140,7 @@ void* JSPServer::ListenThread(int threadid)
 {
     Caller *c = mProtocol -> listen();
     dispatchCommand(c);
-    mUsage[threadid] = -1;
+    delete c;
     pthread_exit(NULL);
 }
 
@@ -145,7 +148,7 @@ void* JSPServer::TimeoutThread()
 {
     while(1)
     {
-        std::cout << "Checking Timeouts: " << std::endl;
+        //std::cout << "Checking Timeouts: " << std::endl;
         timeouts();
         sleep(1);
     }
@@ -210,7 +213,7 @@ void JSPServer::dispatchCommand(Caller *c)
         client_t s = qPop(c, packet-1);
         absolute = s.absoluteByteLocation;
         
-        if(absolute + packet + 1 == mNumChunks)
+        if(absolute + packet + 1 > mNumChunks)
             std::cout << inet_ntoa(c->c_addr.sin_addr) << " Complete." << std::endl;
         
         // is our sequence finished?

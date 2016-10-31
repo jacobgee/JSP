@@ -115,16 +115,7 @@ void displayUsage()
     return;
 }
 
-int main(int argc, char** arv)
-{
-    JSPClient *client = new JSPClient("127.0.0.1", 2525);
-    client->connect();
-    std::cout << "File Size: " << client->init() << std::endl;
-    delete client;
-    return 0;
-}
-
-int fmain(int argc, char** argv)
+int main(int argc, char** argv)
 {
     int port = STANDARD_PORT;
     char *server;

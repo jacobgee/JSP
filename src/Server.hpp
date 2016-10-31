@@ -19,7 +19,7 @@
 #include "JSP.hpp"
 
 #define MAXTHREADS 10
-#define STANDARD_TIMEOUT 1
+#define STANDARD_TIMEOUT 15
 
 typedef struct ClientStatus {
     Caller client;
